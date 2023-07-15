@@ -6,7 +6,7 @@ This phase includes
 - Building Basic Infrastructure with Terraform on AWS
 - Topics Covered
   - **Terraform** 
-    - Concepts : Modularize the resources
+    - Concepts : Sate Management, Workspace
     - Actions : All that followed in previous Phases
   - **Cloud** : AWS
     - Network Resources such as VPC, IGW, NGW, Route, RT, Subnet, Default SG
@@ -31,137 +31,117 @@ Before making the hands dirty, there are few things to understand about terrafor
 
 > **Let's Get Started**
 
- ### 1. Modules
-In this section we are going to learn `Modules` in terraform and move the VPC resources to a module.
+ ### 1. State
+In this section we are going to learn what is `State` in terraform.
 
-A **module** is a container for multiple resources that are used together. You can use modules to create lightweight abstractions, so that you can describe your infrastructure in terms of its architecture, rather than directly in terms of physical objects.
+A **state** is nothing but a JSON file which contains the configuration described/applied by the terraform code.
+- Terraform cannot function without a state file
+- State file used by Terraform to map real world resources to the terraform code configuration.
+- Terraform requires some sort of database to map Terraform config to the real world. For example, when you have a resource resource "aws_instance" "ems-demo" in your configuration, Terraform uses this mapping to know that the resource resource "aws_instance" "ems-demo" represents a real world object with the instance ID i-abcd1234 on a remote system.
+- Also this state file contains the mapping, metadata such as provider versions, dependencies of the provider.
+- In the default configuration, Terraform stores the state in a file in the current working directory where Terraform was run. This is okay for getting started, but when using Terraform in a team it is important for everyone to be working with the same state so that operations will be applied to the same remote objects.
 
-#### - Module Structure
-A minimal recommended module following the standard structure is shown below.
+
+#### - Remote State
+In order to share a single terraform source/repo to multiple actors such more than one human using same code, more than one cicd tools uses the same code then `Remote State` concept with `Lock` is needed. `Remote State` is implemented via `backend` or Terraform cloud.
+
+#### - Backend
+`Backend` describes where the `terraform state` must be stored. By default, Terraform uses a backend called `local`, which stores state as a local file on disk.
+
 ```
-$ tree minimal-module/
-.
-├── README.md
-├── main.tf
-├── variables.tf
-├── outputs.tf
-```
-A complete example of a module following the standard structure is shown below.
-```
-$ tree complete-module/
-.
-├── README.md
-├── main.tf
-├── variables.tf
-├── outputs.tf
-├── ...
-├── modules/
-│   ├── nestedA/
-│   │   ├── README.md
-│   │   ├── variables.tf
-│   │   ├── main.tf
-│   │   ├── outputs.tf
-│   ├── nestedB/
-│   ├── .../
-├── examples/
-│   ├── exampleA/
-│   │   ├── main.tf
-│   ├── exampleB/
-│   ├── .../
-```
-
-**Why are we going for a module concept ?**
-- when the infrastructure as code grows high in volume and more repeated resources are being written then we have to organize and optimize them. So this is the reason to use `modules`
-
-**What are those high volume and repeated resources mean ?**
-- high volume ie, when we are at the end of our project we will be ending up by creating categories of resources such as Network, Compute, Database, Storage, IAM, etc. Ans each of this category has sereval resource so we are designing our IaC such a way theat we create abstracts for each category of resource
-- repeated resources ie, we will be ending up creating multiple ec2 machine, iam roles, buckets etc. Inorder to not to repeat the `resource` and its dependent blocks everytime we need a same type of resource we are modularizing the resources
-
-**How are we modularizing the resources?**
-- as a first step we are going to modularize network resources ie grouping all the resources such as VPC, Subnet, Route Tables, Routes, EIP, to a module named `terraform-aws-vpc`
-- follow along in the next setion for detailed walk through about setting up vpc module
-
-### 2. VPC Module
-In this section we are going to create a module for VPC.
-Basically moving all the relavant `.tf` to a folder and calling them outside of that folder from another `.tf` is what known as modularization
-
-- create a folder `modules`to isolate resources that are to be grouped as module
-- create another folder named `terraform-aws-vpc` under `modules` folder
-- now move all the `.tf` files that are belong to `network resources` such as `vpc.tf`, `subnet.tf`, `data.tf`,`variables.tf` , etc but not the `terraform.tf` file
-- then in the parent folder ie `infra/terraform` create a `main.tf`, `variables.tf` file
-- now declare the vpc module in `main.tf`
-```dotnetcli
-module "vpc" {
-  source                 = "./modules/terraform-aws-vpc"
-  cidr                   = var.vpc_cidr
-  name                   = "${var.name}-${var.environment}"
-  nat_per_az             = true
-  separate_db_subnets    = true
-  subnet_outer_offsets   = [ 3,3,3 ]
-  subnet_inner_offsets   = [ 1,1 ]
-  transit_gateway_attach = false
-  transit_gateway_id     = ""
-  allow_cidrs_default    = {}
-  tags = var.tags
-
-  public_subnet_tags = var.tags
-
-  private_subnet_tags = var.tags
-  environment = var.environment
+terraform {
+  backend "local" {
+    path = "relative/path/to/terraform.tfstate"
+  }
 }
 
 ```
-- in the above snippet, we have declared our `vpc` module and the arguments needed to create the vpc resources
-  - `source` - points to the path/location where the terraform module for vpc is located. This can be local, git refernce, s3, etc
-  - remaining all the attributes holds the values for the variables that are defined in `modules/terraform-aws-vpc/variables.tf`
-- terraform will recognise any module only by issuing `terraform init` command
-- then as usual , terraform plan and apply to be executed from the folder `infra/terraform`
+For `AWS` infra , most popularly used `backend` for the `remote` state is `S3`
 
-# Understood Modules , Correct !!!
+#### - S3 Backend Remote State
+When the remote state is chosen as `S3` then terraform considers the S3 bucket and object key as its terraform state file.
 
-# Now it is your turn to create a module for EC2, IAM and SG
+Here are staps to setup remote state with `s3`
+- Create a s3 bucket named `ems-demo-tfstate` in AWS with version enabled
+- Create a DynamoDB in AWS with string key as `TfLockID`
+- Incase if the AWS CLI user is not having admin access and then add a new IAM Policy to allow S3 and DynamoDB permissions 
+  - Policy to perform S3 Operations
+```
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::ems-demo-tfstate"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::ems-demo-tfstate/demo/dev.tfstate"
+    }
+  ]
+}
+
+```
+  - Policy to perform DynamoDB Operations
+  ```
+  {
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:DescribeTable",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem"
+      ],
+      "Resource": "arn:aws:dynamodb:*:*:table/TfLockID"
+    }
+  ]
+}
+
+  ```
+- Add the `backend` block under the `terraform` block in `terraform.tf`
+```
+terraform {
+  backend "s3" {
+    bucket = "ems-demo-tfstate"
+    key    = "demo/dev.tfstate"
+    region = "us-east-1"
+    dynamodb_table = "TfLockID"
+  }
+}
+
+```
+
+# That's All for Backend Config !!!
+
+# Let us initiate the Terraform code with above changes
 
 
- ### 3. Security Group
-In this section we are going to write the module for Security Group. 
+ ### 2. Re-Initiate, Plan Terraform Modules
+In this section we are going to perform the terraform actions post `s3 backend, remote state` configuration. 
 
-- This module must include
-  - Security Group
-  - Security Group Rules 
-  
-This security group module will be created before the EC2 resources are executed because EC2 machine needs `security groups id` as a mandatory field.
+- Try the following command and observe 
+  - terraform init
+  - terraform plan
+  - terraform apply 
+    
+### 3. Understand Remote State
+ #### - Connect to AWS S3 and Look at the terraform state file created
+ - `dev.tfstate` is the file that holds all the infrastructure details and metadata
 
-Using this module abstract, create a new module for SG on `main.tf`
-
-  
- ### 4. IAM 
-EC2 machine needs an instance profile which is nothing but an IAM role that needs to defined in a way that SSM connect from the browser must be enabled so that one can connect to the instance from the browser
-
-- This module must include
-  - IAM Role
-  - IAM Policy
-  - IAM Policy attachment
-  
-### 5. EC2
-Create a module for EC2 that we are going to use it for deploying our `ems-demo` application
-
-- This module must include
-  - Instance profile
-  - EC2 instance
-  
-Security Group Id, IAM role arn and AMI id must be passed to this module as inputs
-  
-### 6. Understand State
- #### - Look at the terraform state file created
- - `.terraform.tfstate` is the file that holds all the infrastructure details and metadata
-
- ### 7. Destroy All
+ ### 4. Destroy All
  #### - Destroy the infrastructure
  - reun `terraform destroy` to destroy all the resources created by the terraform code.
 
 
 ### Project Phases
+-------
 [Phase - 0 : Full Stack App Deployment (Manually)](https://github.com/jumisa/ems-ops/tree/phase-0)
 [Phase - 1 : Full Stack App Deployment (Daemonize)](https://github.com/jumisa/ems-ops/tree/phase-1)
 [Phase - 2 : Infrastructure by Terraform (Basics)](https://github.com/jumisa/ems-ops/tree/phase-2)
 [Phase - 3 : Infrastructure by Terraform (Network Resource)](https://github.com/jumisa/ems-ops/tree/phase-3)
+[Phase - 4 : Infrastructure by Terraform (Terraform Modules)](https://github.com/jumisa/ems-ops/tree/phase-4)
