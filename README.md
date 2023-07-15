@@ -1,4 +1,4 @@
-# Full Stack Web Application - Phase 6
+# Full Stack Web Application - Phase 7
 In this section, we will learn how to build the basic Infrastructure
 
 This phase includes
@@ -6,7 +6,7 @@ This phase includes
 - Building Basic Infrastructure with Terraform on AWS
 - Topics Covered
   - **Terraform** 
-    - Concepts : Workspace
+    - Concepts : Import, Functions
     - Actions : All that followed in previous Phases
   - **Cloud** : AWS
     - Network Resources such as VPC, IGW, NGW, Route, RT, Subnet, Default SG
@@ -30,49 +30,44 @@ Before making the hands dirty, there are few things to understand about terrafor
 
 > **Let's Get Started**
 
- ### 1. Workspace
-In this section we are going to learn what is `Workspace` in terraform.
+ ### 1. Import
+In this section we are going to learn what is `Import` in terraform.
 
-A **workspace** is to isolate the terraform configuration by enviroment. Simply manages multiple state file for a same working directory
+A **import** is a terraform command (till version 1.5) that is used to import the configuration for the AWS resources that are created ie in other words when there is a need to write an IaC for already existing/running infrastructure.
 
-In other words , the same terraform code base can be used to create AWS resources in multiple AWS accounts, environments. To isolate their states and managing with ease `workspaces` are used.
+Let us assume that we already have an EC2 machine running in AWS account and we have the terraform code for EC2 module which is not applied. 
+So in this case we will be having no values / metadata for this EC2 instance in our terraform state file.
 
-- Variable values for each workspace must declared in specfic for each, example: `WORKSPACE-ems.tfvars`
-- State files can be on local or remote backend
-- Remaining all works the same way as on previous phases  
+But when we try to run `terraform plan` then it will show that it is going to create an EC2 instance on the AWS account which we dont wanted to create, so the option is to `import` the existing EC2 instance.
 
-#### - Setup
-This section explains about how to setup the workspace and deploy with terraform
-1. First thing is to create `.tfvars` file for the workspace/environment for which the values of variables must be passed
-    a. in this case `dev.tfvars` file is created inside the folder `env-config/tfvars`
-    b. there are few variables with values in this. You have to migrate all the variable values from `variables.tf` file to `dev.tfvars` using the sample shared
-1. Create a workspace
-    - `env=dev`
-    - `terraform workspace new ${env}`
-2. Select a workspace for which the terraform config to be applied (can select the workspace only if it is already created)
-    - `terraform workspace select ${env} `
- 
 
-#### - Workspace command
-`terraform workspace list` - to list the workspaces on the working directory of terraform
-`terraform workspace new` - to create new workspace  
-`terraform workspace select` - to choose the workspace that needs the resources to be created
-`terraform workspace show` - to show what is the current workspace you are in
-`terraform workspace delete` - to delete a workspace
+1. connect to AWS account, get the Instance ID
+2. if the EC2 code in TF is written in module then 
+   ```
+   terraform import aws_instance.foo i-abcd1234
+   ```
+3. if in resource block only
+   ```
+   terraform import module.foo.aws_instance.bar i-abcd1234
+   ```
+4. if the resource has count described
+   ```
+   terraform import 'aws_instance.baz[0]' i-abcd1234
+   ```
+   
+Please verify the state file for the successfull import of the resources
 
- ### 2. Re-Initiate, Plan Terraform Modules
-In this section we are going to perform the terraform actions post `s3 backend, remote state` configuration. 
 
-- Try the following command and observe 
-  - terraform init 
-  - terraform plan -var-file=env-config/tfvars/${env}.tfvars
-  - terraform apply -var-file=env-config/tfvars/${env}.tfvars
+ ### 2. Functions
+In this section we are going to learn what is `Functions` in terraform.
+
+There are several fucntions in terraform which cannot be writted on this single readme.
+Basically functions are used for minimizing the codes, repeating the same code in several places. 
+
+Please focus on built0in fuctions of terraform from 
+https://developer.hashicorp.com/terraform/language/functions
     
-### 3. Understand Remote State
- #### - Connect to AWS S3 and Look at the terraform state file created
- - `dev.tfstate` is the file that holds all the infrastructure details and metadata
-
- ### 4. Destroy All
+ ### 3. Destroy All
  #### - Destroy the infrastructure
  - reun `terraform destroy` to destroy all the resources created by the terraform code.
 
@@ -85,3 +80,4 @@ In this section we are going to perform the terraform actions post `s3 backend, 
 1. [Phase - 3 : Infrastructure by Terraform (Network Resource)](https://github.com/jumisa/ems-ops/tree/phase-3)
 1. [Phase - 4 : Infrastructure by Terraform (Terraform Modules)](https://github.com/jumisa/ems-ops/tree/phase-4)
 2. [Phase - 5 : Infrastructure by Terraform (Terraform State)](https://github.com/jumisa/ems-ops/tree/phase-5)
+3. [Phase - 6 : Infrastructure by Terraform (Terraform Workspace)](https://github.com/jumisa/ems-ops/tree/phase-6)
