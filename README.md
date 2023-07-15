@@ -1,4 +1,4 @@
-# Full Stack Web Application - Phase 5
+# Full Stack Web Application - Phase 6
 In this section, we will learn how to build the basic Infrastructure
 
 This phase includes
@@ -6,7 +6,7 @@ This phase includes
 - Building Basic Infrastructure with Terraform on AWS
 - Topics Covered
   - **Terraform** 
-    - Concepts : Sate Management, Workspace
+    - Concepts : Workspace
     - Actions : All that followed in previous Phases
   - **Cloud** : AWS
     - Network Resources such as VPC, IGW, NGW, Route, RT, Subnet, Default SG
@@ -26,108 +26,47 @@ All the infrastructure related codes are present under the folder `infra` and Ia
 Before making the hands dirty, there are few things to understand about terraform code such as how to find appropriate resource?, what are all the attributes need? etc
 - Always refer terraform documentation for any type of resources (implemenatation may differ terraform version to version)
 - Once after the `Architecture` is signed off from the customer/architect, decide on TF version for the project and startup TF project folder structure (that we learnt in `Phase - 3`)
-- Below coming explanation will make you to understand , how to write your first TF project with modules.
 
 
 > **Let's Get Started**
 
- ### 1. State
-In this section we are going to learn what is `State` in terraform.
+ ### 1. Workspace
+In this section we are going to learn what is `Workspace` in terraform.
 
-A **state** is nothing but a JSON file which contains the configuration described/applied by the terraform code.
-- Terraform cannot function without a state file
-- State file used by Terraform to map real world resources to the terraform code configuration.
-- Terraform requires some sort of database to map Terraform config to the real world. For example, when you have a resource resource "aws_instance" "ems-demo" in your configuration, Terraform uses this mapping to know that the resource resource "aws_instance" "ems-demo" represents a real world object with the instance ID i-abcd1234 on a remote system.
-- Also this state file contains the mapping, metadata such as provider versions, dependencies of the provider.
-- In the default configuration, Terraform stores the state in a file in the current working directory where Terraform was run. This is okay for getting started, but when using Terraform in a team it is important for everyone to be working with the same state so that operations will be applied to the same remote objects.
+A **workspace** is to isolate the terraform configuration by enviroment. Simply manages multiple state file for a same working directory
 
+In other words , the same terraform code base can be used to create AWS resources in multiple AWS accounts, environments. To isolate their states and managing with ease `workspaces` are used.
 
-#### - Remote State
-In order to share a single terraform source/repo to multiple actors such more than one human using same code, more than one cicd tools uses the same code then `Remote State` concept with `Lock` is needed. `Remote State` is implemented via `backend` or Terraform cloud.
+- Variable values for each workspace must declared in specfic for each, example: `WORKSPACE-ems.tfvars`
+- State files can be on local or remote backend
+- Remaining all works the same way as on previous phases  
 
-#### - Backend
-`Backend` describes where the `terraform state` must be stored. By default, Terraform uses a backend called `local`, which stores state as a local file on disk.
+#### - Setup
+This section explains about how to setup the workspace and deploy with terraform
+1. First thing is to create `.tfvars` file for the workspace/environment for which the values of variables must be passed
+    a. in this case `dev.tfvars` file is created inside the folder `env-config/tfvars`
+    b. there are few variables with values in this. You have to migrate all the variable values from `variables.tf` file to `dev.tfvars` using the sample shared
+1. Create a workspace
+    - `env=dev`
+    - `terraform workspace new ${env}`
+2. Select a workspace for which the terraform config to be applied (can select the workspace only if it is already created)
+    - `terraform workspace select ${env} `
+ 
 
-```
-terraform {
-  backend "local" {
-    path = "relative/path/to/terraform.tfstate"
-  }
-}
-
-```
-For `AWS` infra , most popularly used `backend` for the `remote` state is `S3`
-
-#### - S3 Backend Remote State
-When the remote state is chosen as `S3` then terraform considers the S3 bucket and object key as its terraform state file.
-
-Here are staps to setup remote state with `s3`
-- Create a s3 bucket named `ems-demo-tfstate` in AWS with version enabled
-- Create a DynamoDB in AWS with string key as `TfLockID`
-- Incase if the AWS CLI user is not having admin access and then add a new IAM Policy to allow S3 and DynamoDB permissions 
-  - Policy to perform S3 Operations
-```
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "s3:ListBucket",
-      "Resource": "arn:aws:s3:::ems-demo-tfstate"
-    },
-    {
-      "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
-      "Resource": "arn:aws:s3:::ems-demo-tfstate/demo/dev.tfstate"
-    }
-  ]
-}
-
-```
-  - Policy to perform DynamoDB Operations
-  ```
-  {
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "dynamodb:DescribeTable",
-        "dynamodb:GetItem",
-        "dynamodb:PutItem",
-        "dynamodb:DeleteItem"
-      ],
-      "Resource": "arn:aws:dynamodb:*:*:table/TfLockID"
-    }
-  ]
-}
-
-  ```
-- Add the `backend` block under the `terraform` block in `terraform.tf`
-```
-terraform {
-  backend "s3" {
-    bucket = "ems-demo-tfstate"
-    key    = "demo/dev.tfstate"
-    region = "us-east-1"
-    dynamodb_table = "TfLockID"
-  }
-}
-
-```
-
-# That's All for Backend Config !!!
-
-# Let us initiate the Terraform code with above changes
-
+#### - Workspace command
+`terraform workspace list` - to list the workspaces on the working directory of terraform
+`terraform workspace new` - to create new workspace  
+`terraform workspace select` - to choose the workspace that needs the resources to be created
+`terraform workspace show` - to show what is the current workspace you are in
+`terraform workspace delete` - to delete a workspace
 
  ### 2. Re-Initiate, Plan Terraform Modules
 In this section we are going to perform the terraform actions post `s3 backend, remote state` configuration. 
 
 - Try the following command and observe 
-  - terraform init
-  - terraform plan
-  - terraform apply 
+  - terraform init 
+  - terraform plan -var-file=env-config/tfvars/${env}.tfvars
+  - terraform apply -var-file=env-config/tfvars/${env}.tfvars
     
 ### 3. Understand Remote State
  #### - Connect to AWS S3 and Look at the terraform state file created
@@ -145,3 +84,4 @@ In this section we are going to perform the terraform actions post `s3 backend, 
 1. [Phase - 2 : Infrastructure by Terraform (Basics)](https://github.com/jumisa/ems-ops/tree/phase-2)
 1. [Phase - 3 : Infrastructure by Terraform (Network Resource)](https://github.com/jumisa/ems-ops/tree/phase-3)
 1. [Phase - 4 : Infrastructure by Terraform (Terraform Modules)](https://github.com/jumisa/ems-ops/tree/phase-4)
+2. [Phase - 5 : Infrastructure by Terraform (Terraform State)](https://github.com/jumisa/ems-ops/tree/phase-5)
